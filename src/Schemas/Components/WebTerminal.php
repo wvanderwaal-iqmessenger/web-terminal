@@ -6,6 +6,7 @@ use Closure;
 use Filament\Schemas\Components\Livewire;
 use MWGuerra\WebTerminal\Data\ConnectionConfig;
 use MWGuerra\WebTerminal\Data\Script;
+use MWGuerra\WebTerminal\Data\ScriptGroup;
 use MWGuerra\WebTerminal\Enums\TerminalMode;
 use MWGuerra\WebTerminal\Enums\TerminalPermission;
 use MWGuerra\WebTerminal\Livewire\StreamTerminal as StreamTerminalComponent;
@@ -1267,14 +1268,31 @@ class WebTerminal extends Livewire
             return [];
         }
 
-        return array_values(array_map(function ($script) {
-            if ($script instanceof Script) {
-                return $script->toArray();
-            }
+        return array_values(array_map([$this, 'normalizeScriptItem'], $scripts));
+    }
 
-            // Validate array has required keys by converting through Script
-            return Script::fromArray($script)->toArray();
-        }, $scripts));
+    /**
+     * Normalize a single script item (Script, ScriptGroup, or array) to its array form.
+     *
+     * @return array<string, mixed>
+     */
+    protected function normalizeScriptItem(mixed $item): array
+    {
+        if ($item instanceof ScriptGroup) {
+            return $item->toArray();
+        }
+
+        if ($item instanceof Script) {
+            return $item->toArray();
+        }
+
+        if (is_array($item) && ($item['type'] ?? null) === 'group') {
+            $item['items'] = array_values(array_map([$this, 'normalizeScriptItem'], $item['items'] ?? []));
+
+            return $item;
+        }
+
+        return Script::fromArray($item)->toArray();
     }
     // ========================================
     // Stream Terminal Mode Configuration

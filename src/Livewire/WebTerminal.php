@@ -2132,15 +2132,31 @@ class WebTerminal extends Component
     }
 
     /**
-     * Get a script by its key.
+     * Get a script by its key (searches recursively through groups).
      *
      * @return array<string, mixed>|null
      */
     public function getScript(string $key): ?array
     {
-        foreach ($this->scripts as $script) {
-            if (($script['key'] ?? '') === $key) {
-                return $script;
+        return $this->findScriptInItems($key, $this->scripts);
+    }
+
+    /**
+     * Recursively search for a script by key within an items array.
+     *
+     * @param  array<int, array<string, mixed>>  $items
+     * @return array<string, mixed>|null
+     */
+    protected function findScriptInItems(string $key, array $items): ?array
+    {
+        foreach ($items as $item) {
+            if (($item['type'] ?? 'script') === 'group') {
+                $found = $this->findScriptInItems($key, $item['items'] ?? []);
+                if ($found !== null) {
+                    return $found;
+                }
+            } elseif (($item['key'] ?? '') === $key) {
+                return $item;
             }
         }
 
@@ -2635,33 +2651,85 @@ class WebTerminal extends Component
     }
 
     /**
-     * Get scripts that are authorized for execution.
+     * Get the full scripts tree with authorization and rendered icon HTML applied.
      *
      * @return array<int, array<string, mixed>>
      */
     public function getAuthorizedScripts(): array
     {
-        $authorized = [];
+        return $this->addRenderedIcons($this->applyAuthorizationInfo($this->scripts));
+    }
 
-        foreach ($this->scripts as $scriptData) {
-            $script = Script::fromArray($scriptData);
+    /**
+     * Recursively add a pre-rendered icon SVG string to every script and group item.
+     *
+     * @param  array<int, array<string, mixed>>  $items
+     * @return array<int, array<string, mixed>>
+     */
+    protected function addRenderedIcons(array $items): array
+    {
+        static $scriptFallback = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 shrink-0"><path fill-rule="evenodd" d="M6.28 5.22a.75.75 0 0 1 0 1.06L2.56 10l3.72 3.72a.75.75 0 0 1-1.06 1.06L.97 10.53a.75.75 0 0 1 0-1.06l4.25-4.25a.75.75 0 0 1 1.06 0Z" clip-rule="evenodd" /></svg>';
+        static $groupFallback = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 shrink-0"><path d="M3.75 3A1.75 1.75 0 002 4.75v3.26a3.235 3.235 0 011.75-.51h12.5c.644 0 1.245.188 1.75.51V6.75A1.75 1.75 0 0016.25 5h-4.836a.25.25 0 01-.177-.073L9.823 3.513A1.75 1.75 0 008.586 3H3.75zM3.75 9A1.75 1.75 0 002 10.75v4.5c0 .966.784 1.75 1.75 1.75h12.5A1.75 1.75 0 0018 15.25v-4.5A1.75 1.75 0 0016.25 9H3.75z" /></svg>';
 
-            // Script is authorized if:
-            // 1. It's elevated (bypasses command whitelist)
-            // 2. All commands are allowed
-            // 3. All its commands are in the allowed list
-            if ($script->isElevated() || $this->allowAllCommands || $script->canRunWithAllowedCommands($this->allowedCommands)) {
-                $scriptData['authorized'] = true;
-                $scriptData['unauthorizedCommands'] = [];
+        return array_map(function (array $item) use ($scriptFallback, $groupFallback): array {
+            if (($item['type'] ?? 'script') === 'group') {
+                $item['renderedIcon'] = $this->renderIcon($item['icon'] ?? 'heroicon-o-folder', $groupFallback);
+                $item['items'] = $this->addRenderedIcons($item['items'] ?? []);
             } else {
-                $scriptData['authorized'] = false;
-                $scriptData['unauthorizedCommands'] = $script->getUnauthorizedCommands($this->allowedCommands);
+                $item['renderedIcon'] = $this->renderIcon($item['icon'] ?? 'heroicon-o-command-line', $scriptFallback);
             }
 
-            $authorized[] = $scriptData;
+            return $item;
+        }, $items);
+    }
+
+    /**
+     * Render a heroicon name to an inline SVG HTML string, falling back to the
+     * provided SVG markup if the icon cannot be resolved.
+     */
+    protected function renderIcon(string $icon, string $fallbackSvg): string
+    {
+        if (! function_exists('svg')) {
+            return $fallbackSvg;
         }
 
-        return $authorized;
+        try {
+            return svg($icon, 'w-5 h-5 shrink-0')->toHtml();
+        } catch (\Throwable) {
+            return $fallbackSvg;
+        }
+    }
+
+    /**
+     * Recursively apply authorization info to an items array.
+     *
+     * @param  array<int, array<string, mixed>>  $items
+     * @return array<int, array<string, mixed>>
+     */
+    protected function applyAuthorizationInfo(array $items): array
+    {
+        $result = [];
+
+        foreach ($items as $item) {
+            if (($item['type'] ?? 'script') === 'group') {
+                $item['items'] = $this->applyAuthorizationInfo($item['items'] ?? []);
+                $result[] = $item;
+            } else {
+                $script = Script::fromArray($item);
+
+                if ($script->isElevated() || $this->allowAllCommands || $script->canRunWithAllowedCommands($this->allowedCommands)) {
+                    $item['authorized'] = true;
+                    $item['unauthorizedCommands'] = [];
+                } else {
+                    $item['authorized'] = false;
+                    $item['unauthorizedCommands'] = $script->getUnauthorizedCommands($this->allowedCommands);
+                }
+
+                $result[] = $item;
+            }
+        }
+
+        return $result;
     }
 
     // ========================================

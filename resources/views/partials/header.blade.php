@@ -22,6 +22,21 @@
             pendingScript: $wire.entangle('pendingScriptKey').live,
             dropdownMaxWidth: 320,
             dropdownMaxHeight: 320,
+            scriptsTree: {!! \Illuminate\Support\Js::from($this->getAuthorizedScripts()) !!},
+            navStack: [],
+            get currentItems() {
+                if (this.navStack.length === 0) return this.scriptsTree;
+                return this.navStack[this.navStack.length - 1].items || [];
+            },
+            get currentGroupLabel() {
+                return this.navStack.length > 0 ? this.navStack[this.navStack.length - 1].label : null;
+            },
+            enterGroup(group) {
+                this.navStack.push(group);
+            },
+            goBack() {
+                this.navStack.pop();
+            },
             updateDropdownSize() {
                 const terminal = this.$el.closest('.secure-web-terminal');
                 if (!terminal) return;
@@ -32,11 +47,13 @@
                 this.dropdownMaxWidth = Math.max(280, terminal.offsetWidth / 2);
                 this.dropdownMaxHeight = Math.max(200, terminal.offsetHeight - headerHeight - inputHeight - 20);
             }
-        }" x-init="updateDropdownSize(); window.addEventListener('resize', () => updateDropdownSize())" x-effect="if (pendingScript) showScriptsDropdown = true">
+        }"
+        x-init="updateDropdownSize(); window.addEventListener('resize', () => updateDropdownSize());"
+        x-effect="if (pendingScript) showScriptsDropdown = true"
+        @click.away="navStack = []; if (!pendingScript) { showScriptsDropdown = false } else { showScriptsDropdown = false; $wire.cancelPendingScript() }">
             <button
                 type="button"
-                @click="showScriptsDropdown = !showScriptsDropdown; if(showScriptsDropdown) updateDropdownSize()"
-                @click.away="if (!pendingScript) showScriptsDropdown = false"
+                @click="showScriptsDropdown = !showScriptsDropdown; if(showScriptsDropdown) { navStack = []; updateDropdownSize(); }"
                 class="flex items-center justify-center w-7 h-7 rounded-full transition-all duration-200"
                 :class="{
                     'bg-purple-500/20 text-purple-600 ring-2 ring-purple-500 ring-offset-2 ring-offset-white dark:ring-offset-zinc-900 shadow-[0_0_15px_rgba(168,85,247,0.5)] animate-pulse': isScriptActive && isScriptActive.isRunning === true,
@@ -62,64 +79,105 @@
                 x-transition:leave-end="opacity-0 scale-95"
                 class="absolute right-0 mt-2 min-w-72 rounded-lg bg-white dark:bg-gray-900 shadow-lg ring-1 ring-black/5 dark:ring-white/10 z-50 overflow-hidden"
                 :style="{ maxWidth: dropdownMaxWidth + 'px' }"
-                @click.away="if (!pendingScript) { showScriptsDropdown = false } else { showScriptsDropdown = false; $wire.cancelPendingScript() }"
             >
+                {{-- Header: back button when inside a group, title otherwise --}}
                 <div class="px-3 py-2 border-b border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-gray-800/50">
-                    <p class="text-xs font-medium text-slate-500 dark:text-gray-400 uppercase tracking-wide">Available Scripts</p>
-                </div>
-                <div class="py-1 overflow-y-auto" :style="{ maxHeight: (dropdownMaxHeight - 40) + 'px' }">
-                    @foreach($this->getAuthorizedScripts() as $script)
-                        @if($pendingScriptKey === $script['key'])
-                        {{-- Confirmation prompt for this script --}}
-                        <div class="px-3 py-3 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-700/30">
-                            <p class="text-sm font-medium text-amber-800 dark:text-amber-300 mb-1">Run "{{ $script['label'] }}"?</p>
-                            <p class="text-xs text-amber-600 dark:text-amber-400 mb-3">This script requires confirmation before running.</p>
-                            <div class="flex items-center gap-2">
-                                <button
-                                    type="button"
-                                    wire:click="confirmPendingScript"
-                                    @click="showScriptsDropdown = false"
-                                    class="px-3 py-1.5 text-xs font-medium rounded-md bg-amber-600 text-white hover:bg-amber-700 transition-colors"
-                                >
-                                    Confirm
-                                </button>
-                                <button
-                                    type="button"
-                                    wire:click="cancelPendingScript"
-                                    class="px-3 py-1.5 text-xs font-medium rounded-md bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-white/10 dark:text-gray-300 dark:hover:bg-white/20 transition-colors"
-                                >
-                                    Cancel
-                                </button>
-                            </div>
-                        </div>
-                        @else
-                        <button
-                            type="button"
-                            wire:click="runScript('{{ $script['key'] }}')"
-                            @if(!($script['confirmBeforeRun'] ?? false)) @click="showScriptsDropdown = false" @endif
-                            class="w-full px-3 py-2.5 text-left hover:bg-slate-100 dark:hover:bg-white/10 transition-colors {{ $script['authorized'] ? '' : 'opacity-50 cursor-not-allowed' }}"
-                            {{ $script['authorized'] ? '' : 'disabled' }}
-                        >
-                            <div class="flex items-center gap-3">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 text-purple-500 dark:text-purple-400 shrink-0">
-                                    <path fill-rule="evenodd" d="M6.28 5.22a.75.75 0 0 1 0 1.06L2.56 10l3.72 3.72a.75.75 0 0 1-1.06 1.06L.97 10.53a.75.75 0 0 1 0-1.06l4.25-4.25a.75.75 0 0 1 1.06 0Z" clip-rule="evenodd" />
+                    <template x-if="navStack.length > 0">
+                        <div class="flex items-center gap-1.5">
+                            <button
+                                type="button"
+                                @click="goBack()"
+                                class="flex items-center justify-center w-5 h-5 rounded hover:bg-slate-200 dark:hover:bg-white/10 transition-colors text-slate-500 dark:text-gray-400 shrink-0"
+                                title="Back"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4">
+                                    <path fill-rule="evenodd" d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z" clip-rule="evenodd" />
                                 </svg>
-                                <div class="flex-1 min-w-0">
-                                    <p class="text-sm font-medium text-slate-800 dark:text-gray-100 truncate" title="{{ $script['label'] }}">{{ $script['label'] }}</p>
-                                    @if($script['description'] ?? false)
-                                    <p class="text-xs text-slate-500 dark:text-gray-400 truncate" title="{{ $script['description'] }}">{{ $script['description'] }}</p>
-                                    @endif
-                                    @if(!($script['authorized'] ?? true))
-                                    <p class="text-xs text-red-500 dark:text-red-400 truncate mt-0.5" title="Unauthorized: {{ implode(', ', $script['unauthorizedCommands'] ?? []) }}">
-                                        Unauthorized: {{ implode(', ', array_slice($script['unauthorizedCommands'] ?? [], 0, 2)) }}{{ count($script['unauthorizedCommands'] ?? []) > 2 ? '...' : '' }}
-                                    </p>
-                                    @endif
+                            </button>
+                            <p class="text-xs font-medium text-slate-500 dark:text-gray-400 truncate" x-text="currentGroupLabel"></p>
+                        </div>
+                    </template>
+                    <template x-if="navStack.length === 0">
+                        <p class="text-xs font-medium text-slate-500 dark:text-gray-400 uppercase tracking-wide">Available Scripts</p>
+                    </template>
+                </div>
+
+                {{-- Items list (rendered via Alpine x-for for client-side navigation) --}}
+                <div class="py-1 overflow-y-auto" :style="{ maxHeight: (dropdownMaxHeight - 40) + 'px' }">
+                    <template x-for="item in currentItems" :key="item.key">
+                        <div>
+                            {{-- Group item --}}
+                            <button
+                                x-show="item.type === 'group'"
+                                type="button"
+                                @click="enterGroup(item)"
+                                class="w-full px-3 py-2.5 text-left hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
+                            >
+                                <div class="flex items-center gap-3">
+                                    <span x-html="item.renderedIcon" class="text-amber-500 dark:text-amber-400 shrink-0"></span>
+                                    <div class="flex-1 min-w-0">
+                                        <p class="text-sm font-medium text-slate-800 dark:text-gray-100 truncate" x-text="item.label"></p>
+                                        <p x-show="item.description" class="text-xs text-slate-500 dark:text-gray-400 truncate" x-text="item.description"></p>
+                                    </div>
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-slate-400 dark:text-gray-500 shrink-0">
+                                        <path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd" />
+                                    </svg>
                                 </div>
-                                <span class="text-xs text-slate-400 dark:text-gray-500 shrink-0">{{ $script['commandCount'] }} cmd{{ $script['commandCount'] !== 1 ? 's' : '' }}</span>
+                            </button>
+
+                            {{-- Confirmation prompt --}}
+                            <div
+                                x-show="item.type !== 'group' && pendingScript === item.key"
+                                class="px-3 py-3 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-700/30"
+                            >
+                                <p class="text-sm font-medium text-amber-800 dark:text-amber-300 mb-1">Run "<span x-text="item.label"></span>"?</p>
+                                <p class="text-xs text-amber-600 dark:text-amber-400 mb-3">This script requires confirmation before running.</p>
+                                <div class="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        @click="$wire.confirmPendingScript(); showScriptsDropdown = false"
+                                        class="px-3 py-1.5 text-xs font-medium rounded-md bg-amber-600 text-white hover:bg-amber-700 transition-colors"
+                                    >
+                                        Confirm
+                                    </button>
+                                    <button
+                                        type="button"
+                                        @click="$wire.cancelPendingScript()"
+                                        class="px-3 py-1.5 text-xs font-medium rounded-md bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-white/10 dark:text-gray-300 dark:hover:bg-white/20 transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
                             </div>
-                        </button>
-                        @endif
-                    @endforeach
+
+                            {{-- Normal script button --}}
+                            <button
+                                x-show="item.type !== 'group' && pendingScript !== item.key"
+                                type="button"
+                                @click="$wire.runScript(item.key); if (!item.confirmBeforeRun) showScriptsDropdown = false"
+                                :disabled="!item.authorized"
+                                :class="item.authorized ? '' : 'opacity-50 cursor-not-allowed'"
+                                class="w-full px-3 py-2.5 text-left hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
+                            >
+                                <div class="flex items-center gap-3">
+                                    <span x-html="item.renderedIcon" class="text-purple-500 dark:text-purple-400 shrink-0"></span>
+                                    <div class="flex-1 min-w-0">
+                                        <p class="text-sm font-medium text-slate-800 dark:text-gray-100 truncate" x-text="item.label"></p>
+                                        <p x-show="item.description" class="text-xs text-slate-500 dark:text-gray-400 truncate" x-text="item.description"></p>
+                                        <p
+                                            x-show="!item.authorized && item.unauthorizedCommands && item.unauthorizedCommands.length > 0"
+                                            class="text-xs text-red-500 dark:text-red-400 truncate mt-0.5"
+                                            x-text="'Unauthorized: ' + (item.unauthorizedCommands || []).slice(0, 2).join(', ') + ((item.unauthorizedCommands || []).length > 2 ? '...' : '')"
+                                        ></p>
+                                    </div>
+                                    <span
+                                        class="text-xs text-slate-400 dark:text-gray-500 shrink-0"
+                                        x-text="item.commandCount + ' cmd' + (item.commandCount !== 1 ? 's' : '')"
+                                    ></span>
+                                </div>
+                            </button>
+                        </div>
+                    </template>
                 </div>
             </div>
         </div>
