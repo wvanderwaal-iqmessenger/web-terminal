@@ -1,5 +1,5 @@
 {
-    "name": "mwguerra/web-terminal",
+    "name": "iqcloud/web-terminal",
     "description": "A web-based terminal component for Filament/Laravel with command whitelisting and multiple connection types",
     "keywords": [
         "laravel",
@@ -79,6 +79,6 @@
             ]
         }
     },
-    "minimum-stability": "stable",
+    "minimum-stability": "dev",
     "prefer-stable": true
 }
