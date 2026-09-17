@@ -255,6 +255,49 @@ class WebTerminal extends Component
         session()->forget($this->getSessionKey());
     }
 
+    protected function getEnvironmentSessionKey(): string
+    {
+        return 'web-terminal.environment.'.$this->componentId;
+    }
+
+    /**
+     * Store the environment variables in the session.
+     *
+     * This keeps secrets carried by the environment server-side while
+     * persisting across Livewire requests, since mount() only runs once.
+     *
+     * @param  array<string, string>  $environment
+     */
+    protected function storeEnvironment(array $environment): void
+    {
+        $this->environment = $environment;
+
+        session()->put($this->getEnvironmentSessionKey(), $environment);
+    }
+
+    /**
+     * Retrieve the environment variables.
+     *
+     * Falls back to the protected property (set during mount on first request).
+     *
+     * @return array<string, string>
+     */
+    protected function getEnvironment(): array
+    {
+        if (! empty($this->environment)) {
+            return $this->environment;
+        }
+
+        $environment = session()->get($this->getEnvironmentSessionKey(), []);
+
+        // Cache in protected property for this request
+        if (! empty($environment)) {
+            $this->environment = $environment;
+        }
+
+        return $environment;
+    }
+
     /**
      * Maximum number of commands in history.
      */
@@ -316,10 +359,15 @@ class WebTerminal extends Component
     /**
      * Environment variables for command execution.
      *
+     * Kept protected and mirrored into the session rather than exposed as a
+     * public Livewire property: environment variables routinely carry secrets
+     * (API tokens, credentials) and public properties are serialized into the
+     * snapshot sent to the browser, where #[Locked] prevents tampering but not
+     * disclosure.
+     *
      * @var array<string, string>
      */
-    #[Locked]
-    public array $environment = [];
+    protected array $environment = [];
 
     /**
      * Whether to use a login shell (loads .bashrc/.bash_profile).
@@ -546,8 +594,8 @@ class WebTerminal extends Component
         // Set interactive mode flag
         $this->allowInteractiveMode = $allowInteractiveMode;
 
-        // Set environment variables
-        $this->environment = $environment;
+        // Set environment variables (kept server-side in the session)
+        $this->storeEnvironment($environment);
 
         // Set shell configuration
         $this->useLoginShell = $useLoginShell;
@@ -1382,7 +1430,7 @@ class WebTerminal extends Component
     protected function configureHandler(ConnectionHandlerInterface $handler): void
     {
         // Build environment with TERM for color support
-        $environment = $this->environment;
+        $environment = $this->getEnvironment();
 
         // Always set TERM for color support if not already set
         if (! isset($environment['TERM'])) {
