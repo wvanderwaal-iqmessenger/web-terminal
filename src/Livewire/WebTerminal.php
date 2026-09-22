@@ -1737,7 +1737,7 @@ class WebTerminal extends Component
             return false;
         }
 
-        $trimmed = trim($line);
+        $trimmed = trim(AnsiToHtml::strip($line));
 
         foreach ($this->pendingInputEchoes as $key => $echo) {
             // Match exact echo or echo preceded by a prompt (e.g., "> 1 + 1")
@@ -1755,12 +1755,13 @@ class WebTerminal extends Component
     /**
      * Clean interactive output: strip ANSI control sequences and PTY input echoes.
      *
+     * Color sequences are kept, since AnsiToHtml renders them in the view.
+     *
      * @return array<string>
      */
     protected function cleanInteractiveOutputLines(string $output): array
     {
-        // Strip all ANSI escape sequences (colors are re-applied by AnsiToHtml in the view)
-        $output = AnsiToHtml::strip($output);
+        $output = AnsiToHtml::stripControlSequences($output);
 
         // Prepend any buffered partial line from the previous chunk.
         // This joins split REPL prompts with their echoed input (e.g., "> " + "1 + 1" → "> 1 + 1").
@@ -1788,7 +1789,7 @@ class WebTerminal extends Component
 
         // Remove empty lines and PHP startup noise (Xdebug warnings, JIT incompatibility)
         return array_values(array_filter($lines, function (string $line): bool {
-            $trimmed = trim($line);
+            $trimmed = trim(AnsiToHtml::strip($line));
             if ($trimmed === '') {
                 return false;
             }

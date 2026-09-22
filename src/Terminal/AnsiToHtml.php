@@ -114,13 +114,7 @@ class AnsiToHtml
         $this->resetState();
 
         // Strip non-SGR escape sequences first (private mode, cursor, OSC, etc.)
-        $text = (string) preg_replace([
-            '/\x1b\[\?[0-9;]*[a-zA-Z]/', // Private mode sequences (\x1b[?2004h, etc.)
-            '/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\\\)/', // OSC sequences
-            '/\x1b[()][0-9A-B]/', // Character set selection
-            '/\x1b[>=]/', // Keypad mode
-            '/\r/', // Carriage returns
-        ], '', $text);
+        $text = static::stripControlSequences($text);
 
         // Handle both \x1b (ESC) and \033 (octal) escape sequences
         // Pattern matches: ESC [ (params) m (SGR color/style sequences)
@@ -525,6 +519,28 @@ class AnsiToHtml
     public function getClassPrefix(): string
     {
         return $this->classPrefix;
+    }
+
+    /**
+     * Strip every escape sequence except SGR (color/style) sequences.
+     *
+     * Cursor movement, erase, private mode, OSC and similar sequences have no
+     * meaning once output is split into lines, but SGR sequences are what
+     * convert() turns into colors, so they are kept.
+     *
+     * @param  string  $text  Text containing ANSI escape sequences
+     * @return string Text containing only SGR escape sequences
+     */
+    public static function stripControlSequences(string $text): string
+    {
+        return (string) preg_replace([
+            '/\x1b\[\?[0-9;]*[a-zA-Z]/', // Private mode sequences (\x1b[?2004h, etc.)
+            '/\x1b\[[0-9;]*[a-ln-zA-Z]/', // Other CSI sequences (cursor, erase), everything but SGR's "m"
+            '/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\\\)/', // OSC sequences
+            '/\x1b[()][0-9A-B]/', // Character set selection
+            '/\x1b[>=]/', // Keypad mode
+            '/\r/', // Carriage returns
+        ], '', $text);
     }
 
     /**

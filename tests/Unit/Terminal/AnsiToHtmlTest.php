@@ -264,6 +264,30 @@ describe('AnsiToHtml', function () {
         });
     });
 
+    describe('stripControlSequences', function () {
+        it('keeps SGR color sequences', function () {
+            $input = "\x1b[1;31mBold Red\x1b[0m Normal \x1b[38;5;208mOrange\x1b[0m";
+
+            expect(AnsiToHtml::stripControlSequences($input))->toBe($input);
+        });
+
+        it('strips cursor, erase and private mode sequences', function () {
+            $input = "\x1b[?25l\x1b[2K\x1b[1A\x1b[32mdone\x1b[0m\x1b[?25h";
+
+            expect(AnsiToHtml::stripControlSequences($input))->toBe("\x1b[32mdone\x1b[0m");
+        });
+
+        it('strips OSC sequences and carriage returns', function () {
+            $input = "\x1b]0;title\x07\x1b[33mwarning\x1b[0m\r";
+
+            expect(AnsiToHtml::stripControlSequences($input))->toBe("\x1b[33mwarning\x1b[0m");
+        });
+
+        it('handles text without ANSI codes', function () {
+            expect(AnsiToHtml::stripControlSequences('Plain text'))->toBe('Plain text');
+        });
+    });
+
     describe('classPrefix', function () {
         it('uses default ansi- prefix', function () {
             expect($this->converter->getClassPrefix())->toBe('ansi-');
