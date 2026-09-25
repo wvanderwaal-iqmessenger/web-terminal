@@ -15,6 +15,7 @@ use MWGuerra\WebTerminal\Data\Script;
 use MWGuerra\WebTerminal\Data\ScriptExecution;
 use MWGuerra\WebTerminal\Data\TerminalOutput;
 use MWGuerra\WebTerminal\Events\CommandExecutedEvent;
+use MWGuerra\WebTerminal\Events\CommandStartingEvent;
 use MWGuerra\WebTerminal\Exceptions\ConnectionException;
 use MWGuerra\WebTerminal\Exceptions\RateLimitException;
 use MWGuerra\WebTerminal\Models\TerminalLog;
@@ -1036,6 +1037,8 @@ class WebTerminal extends Component
                 return;
             }
 
+            $this->dispatchStartingEvent($command);
+
             // Use interactive mode when allowAllCommands is enabled
             if ($this->shouldUseInteractiveMode()) {
                 $this->startInteractiveCommand($command);
@@ -1608,12 +1611,42 @@ class WebTerminal extends Component
             userId: auth()->id() ? (string) auth()->id() : null,
             sessionId: session()->getId(),
             ipAddress: request()->ip(),
-            metadata: array_merge([
-                'terminal_identifier' => $this->logIdentifier,
-                'terminal_session_id' => $this->terminalSessionId !== '' ? $this->terminalSessionId : null,
-                'working_directory' => $this->currentDirectory,
+            metadata: array_merge($this->auditMetadata(), $metadata),
+        ));
+    }
+
+    /**
+     * Dispatch the command starting event, right before the command runs.
+     */
+    protected function dispatchStartingEvent(string $command, array $metadata = []): void
+    {
+        $config = ConnectionConfig::fromArray($this->getConnectionConfig());
+
+        event(new CommandStartingEvent(
+            command: $command,
+            connectionType: $config->type,
+            userId: auth()->id() ? (string) auth()->id() : null,
+            sessionId: session()->getId(),
+            ipAddress: request()->ip(),
+            metadata: array_merge($this->auditMetadata(), [
+                'host' => $config->host,
+                'username' => $config->username,
             ], $metadata),
         ));
+    }
+
+    /**
+     * Metadata describing where a command runs, shared by the audit events.
+     *
+     * @return array<string, mixed>
+     */
+    protected function auditMetadata(): array
+    {
+        return [
+            'terminal_identifier' => $this->logIdentifier,
+            'terminal_session_id' => $this->terminalSessionId !== '' ? $this->terminalSessionId : null,
+            'working_directory' => $this->currentDirectory,
+        ];
     }
 
     /**
@@ -2393,6 +2426,14 @@ class WebTerminal extends Component
 
                 return;
             }
+
+            $this->dispatchStartingEvent($command, [
+                'script_key' => $execution->getScriptKey(),
+                'script_label' => $execution->getScriptLabel(),
+            ]);
+
+            // Time the command itself, not the listeners of the starting event
+            $startTime = microtime(true);
 
             // For scripts, we use interactive mode to handle potential input prompts
             $handler = $this->getConnectionHandler();
