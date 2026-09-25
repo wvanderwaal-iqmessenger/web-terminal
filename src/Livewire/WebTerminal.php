@@ -1597,7 +1597,7 @@ class WebTerminal extends Component
     /**
      * Dispatch the command executed event.
      */
-    protected function dispatchAuditEvent(string $command, CommandResult $result): void
+    protected function dispatchAuditEvent(string $command, CommandResult $result, array $metadata = []): void
     {
         $config = ConnectionConfig::fromArray($this->getConnectionConfig());
 
@@ -1608,6 +1608,11 @@ class WebTerminal extends Component
             userId: auth()->id() ? (string) auth()->id() : null,
             sessionId: session()->getId(),
             ipAddress: request()->ip(),
+            metadata: array_merge([
+                'terminal_identifier' => $this->logIdentifier,
+                'terminal_session_id' => $this->terminalSessionId !== '' ? $this->terminalSessionId : null,
+                'working_directory' => $this->currentDirectory,
+            ], $metadata),
         ));
     }
 
@@ -2074,7 +2079,7 @@ class WebTerminal extends Component
      */
     protected function logInteractiveCommand(?int $exitCode): void
     {
-        if ($this->terminalSessionId === '' || $this->interactiveCommand === '') {
+        if ($this->interactiveCommand === '') {
             return;
         }
 
@@ -2082,8 +2087,23 @@ class WebTerminal extends Component
             ? microtime(true) - $this->interactiveStartTime
             : 0;
 
-        $logger = $this->getLogger();
         $outputText = $this->extractInteractiveOutputText();
+
+        // Dispatch the audit event regardless of whether logging is enabled,
+        // just like synchronous commands do (-1 = exit code unknown)
+        $this->dispatchAuditEvent($this->interactiveCommand, new CommandResult(
+            stdout: $outputText,
+            stderr: '',
+            exitCode: $exitCode ?? -1,
+            executionTime: $executionTime,
+            command: $this->interactiveCommand,
+        ));
+
+        if ($this->terminalSessionId === '') {
+            return;
+        }
+
+        $logger = $this->getLogger();
         $config = $this->getConnectionConfig();
 
         // Log command with SSH details and output in same entry
@@ -2469,6 +2489,20 @@ class WebTerminal extends Component
                 'script_label' => $execution->getScriptLabel(),
                 'script_command_index' => $currentIndex,
                 'script_command_total' => $totalCommands,
+            ]);
+        }
+
+        // Dispatch event for auditing
+        if ($command !== null) {
+            $this->dispatchAuditEvent($command, new CommandResult(
+                stdout: $output,
+                stderr: '',
+                exitCode: $exitCode,
+                executionTime: $executionTime,
+                command: $command,
+            ), [
+                'script_key' => $execution->getScriptKey(),
+                'script_label' => $execution->getScriptLabel(),
             ]);
         }
 
