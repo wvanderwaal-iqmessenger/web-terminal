@@ -10,7 +10,7 @@ use InvalidArgumentException;
  * Fluent builder and DTO for a group of scripts or nested groups.
  *
  * A ScriptGroup appears in the scripts dropdown as a folder that the user can
- * navigate into, revealing its child scripts or nested ScriptGroups.
+ * navigate into, revealing its child scripts, nested ScriptGroups, or ScriptDividers.
  */
 class ScriptGroup
 {
@@ -22,7 +22,7 @@ class ScriptGroup
 
     protected string $icon = 'heroicon-o-folder';
 
-    /** @var array<int, Script|ScriptGroup> */
+    /** @var array<int, Script|ScriptGroup|ScriptDivider> */
     protected array $items = [];
 
     private function __construct(string $key)
@@ -74,9 +74,9 @@ class ScriptGroup
     }
 
     /**
-     * Set the child scripts and/or nested groups.
+     * Set the child scripts, nested groups, and/or dividers.
      *
-     * @param  array<int, Script|ScriptGroup>  $items
+     * @param  array<int, Script|ScriptGroup|ScriptDivider>  $items
      */
     public function items(array $items): static
     {
@@ -105,7 +105,7 @@ class ScriptGroup
         return $this->icon;
     }
 
-    /** @return array<int, Script|ScriptGroup> */
+    /** @return array<int, Script|ScriptGroup|ScriptDivider> */
     public function getItems(): array
     {
         return $this->items;

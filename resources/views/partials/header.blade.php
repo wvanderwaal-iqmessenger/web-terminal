@@ -104,8 +104,19 @@
 
                 {{-- Items list (rendered via Alpine x-for for client-side navigation) --}}
                 <div class="py-1 overflow-y-auto" :style="{ maxHeight: (dropdownMaxHeight - 40) + 'px' }">
-                    <template x-for="item in currentItems" :key="item.key">
+                    <template x-for="(item, index) in currentItems" :key="item.type === 'divider' ? 'divider-' + index : item.key">
                         <div>
+                            {{-- Divider --}}
+                            <div x-show="item.type === 'divider'" role="separator" class="flex items-center gap-2 px-3 py-1.5">
+                                <div class="flex-1 border-t border-slate-200 dark:border-white/10"></div>
+                                <template x-if="item.label">
+                                    <p class="text-[10px] font-medium text-slate-400 dark:text-gray-500 uppercase tracking-wide shrink-0" x-text="item.label"></p>
+                                </template>
+                                <template x-if="item.label">
+                                    <div class="flex-1 border-t border-slate-200 dark:border-white/10"></div>
+                                </template>
+                            </div>
+
                             {{-- Group item --}}
                             <button
                                 x-show="item.type === 'group'"
@@ -127,7 +138,7 @@
 
                             {{-- Confirmation prompt --}}
                             <div
-                                x-show="item.type !== 'group' && pendingScript === item.key"
+                                x-show="item.type !== 'group' && item.type !== 'divider' && pendingScript === item.key"
                                 class="px-3 py-3 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-700/30"
                             >
                                 <p class="text-sm font-medium text-amber-800 dark:text-amber-300 mb-1">Run "<span x-text="item.label"></span>"?</p>
@@ -152,7 +163,7 @@
 
                             {{-- Normal script button --}}
                             <button
-                                x-show="item.type !== 'group' && pendingScript !== item.key"
+                                x-show="item.type !== 'group' && item.type !== 'divider' && pendingScript !== item.key"
                                 type="button"
                                 @click="$wire.runScript(item.key); if (!item.confirmBeforeRun) showScriptsDropdown = false"
                                 :disabled="!item.authorized"

@@ -2252,6 +2252,10 @@ class WebTerminal extends Component
     protected function findScriptInItems(string $key, array $items): ?array
     {
         foreach ($items as $item) {
+            if (($item['type'] ?? 'script') === 'divider') {
+                continue;
+            }
+
             if (($item['type'] ?? 'script') === 'group') {
                 $found = $this->findScriptInItems($key, $item['items'] ?? []);
                 if ($found !== null) {
@@ -2785,7 +2789,7 @@ class WebTerminal extends Component
     }
 
     /**
-     * Recursively add a pre-rendered icon SVG string to every script and group item.
+     * Recursively add a pre-rendered icon SVG string to every script and group item (dividers have none).
      *
      * @param  array<int, array<string, mixed>>  $items
      * @return array<int, array<string, mixed>>
@@ -2796,6 +2800,10 @@ class WebTerminal extends Component
         static $groupFallback = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 shrink-0"><path d="M3.75 3A1.75 1.75 0 002 4.75v3.26a3.235 3.235 0 011.75-.51h12.5c.644 0 1.245.188 1.75.51V6.75A1.75 1.75 0 0016.25 5h-4.836a.25.25 0 01-.177-.073L9.823 3.513A1.75 1.75 0 008.586 3H3.75zM3.75 9A1.75 1.75 0 002 10.75v4.5c0 .966.784 1.75 1.75 1.75h12.5A1.75 1.75 0 0018 15.25v-4.5A1.75 1.75 0 0016.25 9H3.75z" /></svg>';
 
         return array_map(function (array $item) use ($scriptFallback, $groupFallback): array {
+            if (($item['type'] ?? 'script') === 'divider') {
+                return $item;
+            }
+
             if (($item['type'] ?? 'script') === 'group') {
                 $item['renderedIcon'] = $this->renderIcon($item['icon'] ?? 'heroicon-o-folder', $groupFallback);
                 $item['items'] = $this->addRenderedIcons($item['items'] ?? []);
@@ -2835,7 +2843,9 @@ class WebTerminal extends Component
         $result = [];
 
         foreach ($items as $item) {
-            if (($item['type'] ?? 'script') === 'group') {
+            if (($item['type'] ?? 'script') === 'divider') {
+                $result[] = $item;
+            } elseif (($item['type'] ?? 'script') === 'group') {
                 $item['items'] = $this->applyAuthorizationInfo($item['items'] ?? []);
                 $result[] = $item;
             } else {

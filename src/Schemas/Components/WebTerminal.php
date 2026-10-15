@@ -6,6 +6,7 @@ use Closure;
 use Filament\Schemas\Components\Livewire;
 use MWGuerra\WebTerminal\Data\ConnectionConfig;
 use MWGuerra\WebTerminal\Data\Script;
+use MWGuerra\WebTerminal\Data\ScriptDivider;
 use MWGuerra\WebTerminal\Data\ScriptGroup;
 use MWGuerra\WebTerminal\Enums\TerminalMode;
 use MWGuerra\WebTerminal\Enums\TerminalPermission;
@@ -1272,12 +1273,16 @@ class WebTerminal extends Livewire
     }
 
     /**
-     * Normalize a single script item (Script, ScriptGroup, or array) to its array form.
+     * Normalize a single script item (Script, ScriptGroup, ScriptDivider, or array) to its array form.
      *
      * @return array<string, mixed>
      */
     protected function normalizeScriptItem(mixed $item): array
     {
+        if ($item instanceof ScriptDivider) {
+            return $item->toArray();
+        }
+
         if ($item instanceof ScriptGroup) {
             return $item->toArray();
         }
@@ -1290,6 +1295,10 @@ class WebTerminal extends Livewire
             $item['items'] = array_values(array_map([$this, 'normalizeScriptItem'], $item['items'] ?? []));
 
             return $item;
+        }
+
+        if (is_array($item) && ($item['type'] ?? null) === 'divider') {
+            return ScriptDivider::make($item['label'] ?? null)->toArray();
         }
 
         return Script::fromArray($item)->toArray();
